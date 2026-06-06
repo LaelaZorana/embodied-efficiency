@@ -29,7 +29,21 @@ Manual CUDA graph: **5.9× over eager** at steps=10, and beats torch.compile. Th
 
 **Corrected diagnosis:** the bottleneck is *not* dot compute or weight bytes. At batch=1 each step is ~36 *tiny* per-linear matmuls (M=50); the work is dominated by per-op launch/overhead across many small ops, where cuBLAS+graphs already win and a custom per-linear Triton kernel can't compete — regardless of tensor cores or low-bit. **Weight-only low-bit quant via a custom GEMM is the wrong lever for batch-1 latency on a fast datacenter GPU.**
 
-**Where low-bit actually pays off (not measured here):** memory *capacity* (fit a bigger model / smaller footprint — int8 2×, int4 4× smaller, fidelity intact per §4), bandwidth-starved **edge HW (Jetson Orin)**, or larger `d`/batch where weights dominate. **Do not quote the byte-ceiling as a latency win.** The real latency win on T4 is CUDA graphs (§1).
+## 2b. Model-size sweep — does low-bit cross over to win at larger d? NO. (`sweep.py`)
+Tested the "model too small" hypothesis. Tesla T4, batch=1, steps=10, +CUDA graph:
+| d_model | fp16 ms/step | int8 ms/step | int8/fp16 |
+|---|---|---|---|
+| 512  | 1.091  | 4.535   | 4.16× |
+| 1024 | 1.722  | 12.446  | 7.23× |
+| 2048 | 4.846  | 46.040  | 9.50× |
+| 4096 | 17.438 | 199.178 | 11.42× |
+
+**Refuted.** Scaling *up* makes the custom kernel relatively *worse* (4.16× → 11.42×). At larger `d` the GEMMs are bigger and cuBLAS's optimization advantage (tiling/pipelining/split-K, years of tuning) dominates; a hand-written Triton kernel falls further behind, and the byte-savings can't overcome being far from the memory roofline.
+
+## Verdict (3 experiments, all refute low-bit-via-hand-kernel for batch-1 latency)
+1. v1 fp32 kernel — lost to cuBLAS (5.5×).  2. v2 tensor-core + autotune — no change.  3. size sweep — gets *worse* with size.
+
+**A hand-written Triton weight-only-quant GEMM is not competitive with cuBLAS fp16 for this VLA at batch=1 on T4, at any size.** Realizing low-bit's benefit needs a *production* int8 GEMM (Marlin / CUTLASS / TensorRT-LLM — which are cuBLAS-competitive), or genuinely different HW (Jetson + TensorRT INT8). Even then, the batch-1 benefit is memory *capacity* (int8 2× / int4 4× smaller, fidelity intact per §4), not a big latency gain. **The robust, real latency win here is CUDA graphs (§1, 5.9×).** Do not quote the byte-ceiling as a latency win.
 
 ## 3. Correctness + no-leak (T4) — all ✓
 ```
