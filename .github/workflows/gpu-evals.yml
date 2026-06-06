@@ -20,7 +20,7 @@ jobs:
   gpu-evals:
     runs-on: [self-hosted, gpu]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: deps (triton; torch+cuda assumed present on the runner)
         run: pip install --quiet triton
       - name: kernel correctness (triton vs torch reference)
