@@ -19,9 +19,16 @@ The frontier of embodied AI is no longer "can the model do it." It's: *can it ru
 | Component | What it does | Status |
 |---|---|---|
 | **Thesis** | Why efficiency, not capability, is the bottleneck | ✅ [THESIS.md](THESIS.md) |
-| **Fused flow-matching kernel** | Triton kernel for the iterative action-sampling loop generic serving stacks ignore | 🚧 scoped — [kernel/PLAN.md](kernel/PLAN.md) |
-| **Autotuning deploy-compiler** | budget in (*"100 Hz on an Orin, <15 W"*) → deployable engine out, via precision × chunk-size × pruning search | 📋 in design |
+| **CUDA-graph sampler** | manual graph capture of the N-step flow loop | ✅ **5.9× measured on T4** ([RESULTS.md](kernel/RESULTS.md)) |
+| **Low-bit fused kernel** | hand-written INT8/INT4 Triton dequant→GEMM | 🔬 investigated → **negative** (loses to cuBLAS; see findings) |
+| **Autotuning deploy-compiler** | budget in (*"100 Hz on an Orin, <15 W"*) → deployable engine out | 📋 in design |
 | **Runtime trust layer** | statistically certified non-regression + OOD abstention + intervention logging | 🔜 planned |
+
+## Findings (measured on a Tesla T4 — full data in [kernel/RESULTS.md](kernel/RESULTS.md))
+
+- ✅ **CUDA-graph capture of the sampler: 5.9× over eager** (4.82 → 0.82 ms/step), beats `torch.compile`, with exact replay + **zero memory leak** across fp16/int8/int4.
+- 🔬 **Weight-only INT8/INT4 via a hand-written Triton kernel — a rigorously characterized negative.** Loses to cuBLAS fp16 at batch=1; a tensor-core + autotune rewrite didn't help; a 512→4096 size sweep made it *worse* (4× → 11×). Conclusion: a custom low-bit GEMM isn't competitive with cuBLAS here — realizing low-bit needs a production int8 library (Marlin / CUTLASS / TensorRT) or edge silicon. At batch=1 it's a memory-*footprint* lever (int8 2× / int4 4× smaller, ≤4% action error), not a latency one.
+- Method: every number gated by correctness + stale-input + no-leak evals; three experiments, reported win and negative alike.
 
 ## Reproduce
 - **CPU evals (free, automatic):** every push runs `kernel/selfcheck.py` via [`ci.yml`](.github/workflows/ci.yml) — quant fidelity, kernel fallback numerics, no-leak determinism. Run locally with `python3 kernel/selfcheck.py`.

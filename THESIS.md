@@ -31,6 +31,16 @@ So that's the work:
 - **A budget-driven autotuning compiler for VLAs.** You hand it a target — *"100 Hz on an Orin, under 15 watts"* — and it searches the precision × chunk-size × pruning space and hands back the deployable engine, not just a benchmark row. The papers *measure* efficiency; almost nobody ships the *search* that picks the right configuration for *your* robot.
 - **A small set of Triton kernels** for the VLA-specific gaps the generic LLM-serving stacks (vLLM, SGLang, TensorRT-LLM) don't cover: fused flow-matching/diffusion sampling, INT4 multimodal token paths, chunked-decode KV reuse.
 
+## First results (measured, not promised)
+
+I started at the bottom of that stack — the flow-matching sampling loop — and measured everything on a free T4, with correctness and memory-leak checks gating every number.
+
+**The win: CUDA graphs.** Capturing the N-step sampler in a CUDA graph took it from **4.82 → 0.82 ms/step (5.9×)**, beating `torch.compile`'s own graph mode, with exact replay and zero memory leak.
+
+**The honest negative: weight-only low-bit didn't pay off — and I have the receipts.** I expected INT8/INT4 weight quantization to win in this memory-bound regime. It didn't — the hand-written kernel was slower than cuBLAS fp16. So I rewrote it for tensor cores + autotuning: no change. Then I swept model size 512→4096 expecting a crossover: the gap *widened* (4× → 11×). Three experiments, one conclusion — a hand-written low-bit GEMM can't beat cuBLAS for this workload at batch=1; realizing low-bit's benefit needs a production int8 library (Marlin/CUTLASS/TensorRT) or real edge silicon, and at batch=1 it's a memory-*footprint* lever, not a latency one.
+
+I'm reporting the negative as plainly as the win. Knowing *where the lever isn't* is half of performance engineering.
+
 ## Where it points
 
 And then the part that matters the moment these systems are actually autonomous: a thin **runtime trust layer**. Not red-teaming, not another eval harness — *statistically certified non-regression* on a declared distribution, OOD abstention, and intervention logging. The telemetry that lets a hospital-logistics robot or a factory humanoid be both **deployed and governed** under frameworks like the FDA's device-lifecycle guidance or the EU AI Act.
