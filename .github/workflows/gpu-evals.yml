@@ -1,0 +1,34 @@
+name: gpu-evals
+
+# ============================ BILLING-SAFE BY DESIGN ============================
+# MANUAL ONLY (workflow_dispatch) — never runs on push.
+# Targets a SELF-HOSTED runner labelled [self-hosted, gpu]. GitHub-HOSTED GPU
+# runners are PAID and are deliberately NOT used here, so this workflow cannot
+# incur surprise charges: until you attach a self-hosted GPU runner (e.g. a
+# Lambda / Paperspace / own T4 box) and click "Run workflow", it has nothing to
+# run on and stays idle. Self-hosted runners on private repos are currently free.
+#
+# To use: Settings > Actions > Runners > New self-hosted runner (Linux, with CUDA
+# + a recent torch), label it `gpu`, then trigger this workflow from the Actions tab.
+# Assumes the runner image already has a CUDA-enabled torch installed.
+# ===============================================================================
+
+on:
+  workflow_dispatch:
+
+jobs:
+  gpu-evals:
+    runs-on: [self-hosted, gpu]
+    steps:
+      - uses: actions/checkout@v4
+      - name: deps (triton; torch+cuda assumed present on the runner)
+        run: pip install --quiet triton
+      - name: kernel correctness (triton vs torch reference)
+        run: python kernel/triton_gemm.py
+      - name: cuda-graph correctness + stale-input + no-leak
+        run: python kernel/cudagraph.py
+      - name: latency matrix (eager / compile-graph / manual-graph / int8 / int4 / +graph)
+        run: |
+          python kernel/bench.py --steps 10 4 8 --batch 1 --dtype fp16 --compile --graph --peak T4
+          python kernel/bench.py --steps 10 4 8 --batch 1 --dtype fp16 --quant int8 --graph --peak T4
+          python kernel/bench.py --steps 10 4 8 --batch 1 --dtype fp16 --quant int4 --graph --peak T4

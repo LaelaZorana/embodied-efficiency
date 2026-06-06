@@ -1,5 +1,7 @@
 # embodied-efficiency
 
+[![ci](https://github.com/LaelaZorana/embodied-efficiency/actions/workflows/ci.yml/badge.svg)](https://github.com/LaelaZorana/embodied-efficiency/actions/workflows/ci.yml)
+
 **Making frontier embodied & multimodal models cheap to run and safe to deploy.**
 
 Kernels, quantization, and the runtime trust layer for vision-language-action (VLA) models — so they run *on the robot*, under a latency and power budget, and can be deployed **and** governed.

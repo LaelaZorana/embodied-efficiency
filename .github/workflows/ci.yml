@@ -1,0 +1,26 @@
+name: ci
+
+# Free CPU CI: compiles everything and runs every GPU-free eval (quant fidelity,
+# kernel fallback numerics, int4 pack/unpack, cuda-graph eager-fallback determinism,
+# notebook validity) on the standard free hosted runner. No GPU, no extra billing.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  cpu-evals:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: install torch (CPU wheel only — fast, no CUDA)
+        run: pip install --quiet torch --index-url https://download.pytorch.org/whl/cpu
+      - name: compile
+        run: python -m py_compile kernel/*.py
+      - name: cpu self-check (exits nonzero on any eval failure)
+        run: python kernel/selfcheck.py
