@@ -92,7 +92,7 @@ def main():
     ap.add_argument("--iters", type=int, default=50)
     ap.add_argument("--dtype", default="fp32", choices=["fp16", "bf16", "fp32"])
     ap.add_argument("--compile", action="store_true", help="add torch.compile reduce-overhead (CUDA)")
-    ap.add_argument("--quant", default="none", choices=["none", "int8"], help="swap transformer linears to the INT8 fused kernel")
+    ap.add_argument("--quant", default="none", choices=["none", "int8", "int4"], help="swap transformer linears to the fused low-bit kernel")
     ap.add_argument("--peak", default="T4", choices=list(DEVICE_PEAKS), help="device for roofline ridge")
     ap.add_argument("--out", default="bench_results.json")
     args = ap.parse_args()
@@ -108,10 +108,11 @@ def main():
     cfg = ActionExpertConfig()
     torch.manual_seed(0)
     model = ActionExpert(cfg).to(dev).to(dtype).eval()
-    if args.quant == "int8":
+    if args.quant in ("int8", "int4"):
         from triton_gemm import quantize_model_triton
-        quantize_model_triton(model, bits=8)
-        print("quantized transformer linears -> INT8 fused kernel (IO projections kept fp)")
+        bits = int(args.quant[3:])
+        quantize_model_triton(model, bits=bits)
+        print(f"quantized transformer linears -> {args.quant.upper()} fused kernel (IO projections kept fp)")
     qtag = "" if args.quant == "none" else f"{args.quant}/"
     B = args.batch
     x0 = torch.randn(B, cfg.horizon, cfg.action_dim, device=dev, dtype=dtype)
