@@ -20,5 +20,20 @@ At batch=1, arithmetic intensity ≈ **24 FLOP/byte** vs the T4 roofline ridge *
 
 **Read:** INT8 ≈ 2× the dominant cost for 0.25% action error (≈ free). INT4 ≈ 3.9× for ~4% — the QAT/grouping target. IO projections kept fp16 by design.
 
-## 3. Next (needs CUDA)
-Author the **fused INT4/INT8 dequant→GEMM Triton kernel** and benchmark on Colab T4 vs the fp16 CUDA-graph baseline (`bench.py --compile --dtype fp16`). Target: realized latency reduction approaching the ceilings above, on a roofline, with action rMSE reported.
+## 3. Fused low-bit kernels (`triton_gemm.py`)
+INT8 + INT4 weight-only dequant→GEMM Triton kernels (INT4 = 2-per-byte nibble packing, a_even/a_odd in-kernel unpack). Numerics validated locally against a torch fallback: int8 action rMSE 0.0025, int4 0.0423 (match §2). **GPU latency pending T4.**
+
+## 4. CUDA graphs + low-bit (orthogonal stack) (`cudagraph.py`)
+Manual `torch.cuda.CUDAGraph` capture of the N-step sampler — NOT `torch.compile`, which graph-breaks on raw user Triton kernels (would need `torch.library.triton_op`). Graphs remove per-launch CPU overhead; the kernel cuts weight bytes; combined they should stack.
+
+Failure modes researched and defended in code:
+- **capture-time JIT** → warm up on a side stream before capture.
+- **stale frozen input** → static input buffer + `copy_` per replay (the #1 silent CUDA-graph bug).
+- **output aliasing** → `clone()` the captured output after replay.
+- **memory-pool growth** → no-leak eval asserts `memory_allocated()` stable over 50 replays.
+- **autotune-in-capture** (pytorch #120802) → fixed block sizes, no `@triton.autotune`.
+
+Evals (`python3 kernel/cudagraph.py`, GPU): correctness vs eager, **stale-input** (two distinct inputs each match eager), **no-leak**. Off-CUDA it runs an eager-fallback determinism check (passes locally). **GPU run pending T4.**
+
+## Next (needs CUDA — Colab T4)
+Run `colab.ipynb`: latency for eager / torch.compile-graph / manual-graph / int8 / int4 / int8+graph / int4+graph, on a roofline, and confirm all eval lines print ✓ (not FAIL) before quoting any speedup.

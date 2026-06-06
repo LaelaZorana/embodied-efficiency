@@ -93,6 +93,7 @@ def main():
     ap.add_argument("--dtype", default="fp32", choices=["fp16", "bf16", "fp32"])
     ap.add_argument("--compile", action="store_true", help="add torch.compile reduce-overhead (CUDA)")
     ap.add_argument("--quant", default="none", choices=["none", "int8", "int4"], help="swap transformer linears to the fused low-bit kernel")
+    ap.add_argument("--graph", action="store_true", help="capture the sampler in a CUDA graph (manual, composes with --quant)")
     ap.add_argument("--peak", default="T4", choices=list(DEVICE_PEAKS), help="device for roofline ridge")
     ap.add_argument("--out", default="bench_results.json")
     args = ap.parse_args()
@@ -127,6 +128,14 @@ def main():
     if args.compile and dev == "cuda":
         cmodel = torch.compile(model, mode="reduce-overhead")
         variants.append(("compile_reduce_overhead", lambda ns: (lambda: flow_sample(cmodel, x0, ns, pkv))))
+    if args.graph and dev == "cuda":
+        from cudagraph import GraphedSampler
+
+        def _mk_graph(ns):
+            gs = GraphedSampler(model, x0, ns)
+            return lambda: gs.run(x0)
+
+        variants.append(("graph", _mk_graph))
 
     ridge = DEVICE_PEAKS[args.peak]
     ridge_ai = ridge[0] * 1e12 / (ridge[1] * 1e9)
