@@ -29,7 +29,7 @@ from flow_expert import flow_sample
 class GraphedSampler:
     """Captures flow_sample(expert, x, n_steps) into a CUDA graph with a static input."""
 
-    def __init__(self, expert, x_template, n_steps, warmup=3):
+    def __init__(self, expert, x_template, n_steps, warmup=5):
         self.expert, self.n = expert, n_steps
         self.cuda = x_template.is_cuda and torch.cuda.is_available()
         self.prefix_kv = expert.encode_prefix(x_template.shape[0])  # constant, captured
