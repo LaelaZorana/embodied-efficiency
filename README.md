@@ -23,6 +23,10 @@ The frontier of embodied AI is no longer "can the model do it." It's: *can it ru
 | **Autotuning deploy-compiler** | budget in (*"100 Hz on an Orin, <15 W"*) → deployable engine out, via precision × chunk-size × pruning search | 📋 in design |
 | **Runtime trust layer** | statistically certified non-regression + OOD abstention + intervention logging | 🔜 planned |
 
+## Reproduce
+- **CPU evals (free, automatic):** every push runs `kernel/selfcheck.py` via [`ci.yml`](.github/workflows/ci.yml) — quant fidelity, kernel fallback numerics, no-leak determinism. Run locally with `python3 kernel/selfcheck.py`.
+- **GPU latency + evals:** [`RUN_ON_T4.md`](RUN_ON_T4.md) — ~10 min on a free Colab T4 via [`colab.ipynb`](colab.ipynb).
+
 ## Principles
 
 - **Measure first.** Benchmark against *strong* baselines (`torch.compile` + CUDA graphs), never strawmen.
