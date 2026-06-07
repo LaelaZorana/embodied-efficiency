@@ -7,7 +7,7 @@ Env: Tesla T4, torch 2.11.0+cu128, triton 3.6.0. Action expert 25.5M params, 50.
 - ✅ **Loop is memory-bound** on real HW (AI ≈ 48 FLOP/byte vs T4 ridge 203).
 - ✅ **CUDA graphs are the win: 5.9× over eager** (4.818 → 0.819 ms/step), and the **manual capture beats `torch.compile(reduce-overhead)`** (0.819 vs 0.955). Composes with quant.
 - ✅ **All correctness + no-leak evals pass** (kernel numerics, CUDA-graph exact replay, stale-input, zero memory leak) across fp16/int8/int4.
-- ❌ **The low-bit Triton GEMM is *slower* than fp16 cuBLAS on T4**, and a tensor-core + autotune rewrite (v2) did **not** fix it. The 1.97×/3.88× byte-ceiling is NOT a latency win at batch=1; corrected diagnosis in §2 (it's a tiny-matmul/op-overhead regime, not weight-byte-bound).
+- ❌ **Weight-only low-bit gives NO batch-1 latency win** — confirmed across 4 experiments incl. a **production torchao/Marlin int4 kernel on a supported L4** (still 1.2–1.6× *slower* than bf16, §2c). Not a hand-kernel gap; the batch-1 VLA regime just isn't where weight-only int4 pays off. Low-bit's value here is memory *footprint*, not speed.
 
 ## 1. fp16 baseline — eager vs torch.compile(graphs) vs manual CUDA graph (ms/step)
 | steps | eager | compile_reduce_overhead | **manual graph** |
@@ -40,10 +40,25 @@ Tested the "model too small" hypothesis. Tesla T4, batch=1, steps=10, +CUDA grap
 
 **Refuted.** Scaling *up* makes the custom kernel relatively *worse* (4.16× → 11.42×). At larger `d` the GEMMs are bigger and cuBLAS's optimization advantage (tiling/pipelining/split-K, years of tuning) dominates; a hand-written Triton kernel falls further behind, and the byte-savings can't overcome being far from the memory roofline.
 
-## Verdict (3 experiments, all refute low-bit-via-hand-kernel for batch-1 latency)
-1. v1 fp32 kernel — lost to cuBLAS (5.5×).  2. v2 tensor-core + autotune — no change.  3. size sweep — gets *worse* with size.
+## 2c. Production int4 (torchao / Marlin) on L4 — the decisive test
+The hand kernel losing could have been an implementation gap. So I tested the *production* path: `torchao.quantize_(model, Int4WeightOnlyConfig(...))` (Marlin/tinygemm — cuBLAS-competitive, the canonical batch-1 weight-only int4) on a **Colab L4 (Ada sm_89)**, the mature/supported hardware. Eager... err, +CUDA-graph, batch=1, steps=10:
 
-**A hand-written Triton weight-only-quant GEMM is not competitive with cuBLAS fp16 for this VLA at batch=1 on T4, at any size.** Realizing low-bit's benefit needs a *production* int8 GEMM (Marlin / CUTLASS / TensorRT-LLM — which are cuBLAS-competitive), or genuinely different HW (Jetson + TensorRT INT8). Even then, the batch-1 benefit is memory *capacity* (int8 2× / int4 4× smaller, fidelity intact per §4), not a big latency gain. **The robust, real latency win here is CUDA graphs (§1, 5.9×).** Do not quote the byte-ceiling as a latency win.
+| d_model | bf16 ms/step | int4 (torchao) ms/step | int4/bf16 | rMSE |
+|---|---|---|---|---|
+| 512  | 0.452  | 0.736  | 1.63× | 0.045 |
+| 2048 | 3.663  | 4.486  | 1.22× | 0.045 |
+| 4096 | 13.481 | 19.862 | 1.47× | 0.050 |
+
+**Even the production kernel loses at every size** (int4 1.2–1.6× *slower* than bf16). int4 is relatively closest at d=2048 (weight-read matters more there) but never wins.
+
+(ZeroGPU was tried first for free — its Blackwell sm_120 is too new for torchao stable int4: `cutlass cannot initialize`. L4/Ada is the mature path, and it gives the clean answer above.)
+
+## FINAL VERDICT (4 experiments)
+1. hand fp32 kernel — lost.  2. hand tensor-core + autotune — no change.  3. size sweep — *worse* with d.  4. **production torchao int4 on supported L4 — also loses (1.2–1.6×).**
+
+**Weight-only low-bit quantization does NOT give a batch-1 latency win for this VLA flow-matching sampler — not with a hand kernel, not with a production kernel, not at any size.** Why: at batch=1 the per-step is small skinny-GEMMs (M≈50) plus substantial non-GEMM work (prefix cross-attn, norms, flow integration); weight-only int4 is built for M=1 LLM *decode* of huge models, where weight reads dominate — a different regime. Here, bf16 tensor cores win.
+
+**What low-bit IS for here: memory *footprint*** (int8 2× / int4 4× smaller, ≤5% action error — §4), e.g. fitting a bigger policy on an edge device. **The real *latency* win is CUDA graphs (§1, 5.9×).** Do not quote the byte-ceiling as a latency win.
 
 ## 3. Correctness + no-leak (T4) — all ✓
 ```
