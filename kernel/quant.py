@@ -39,7 +39,7 @@ class QuantLinear(nn.Module):
     """Drop-in for nn.Linear: stores int weights + fp scales, dequantizes on the fly.
 
     This is the *reference* (dequant materializes the fp weight, so it is not fast
-    in torch) — the Triton kernel fuses dequant into the GEMM to actually win.
+    in torch), the Triton kernel fuses dequant into the GEMM to actually win.
     """
 
     def __init__(self, lin: nn.Linear, bits: int, group_size: int = 128):
@@ -62,7 +62,7 @@ class QuantLinear(nn.Module):
 def quantize_model(model: nn.Module, bits: int, group_size: int = 128,
                    skip=("in_proj", "out_proj")) -> nn.Module:
     """Quantize the big transformer linears; keep the IO projections (to/from the
-    tiny action space) in fp — standard, and where low-bit hurts fidelity most."""
+    tiny action space) in fp, standard, and where low-bit hurts fidelity most."""
     for name, mod in list(model.named_children()):
         if name in skip:
             continue
@@ -95,7 +95,7 @@ def main():
     print(f"action expert: {sum(p.numel() for p in fp.parameters())/1e6:.2f}M params, "
           f"fp16 linear weights = {fp16_bytes/1e6:.2f} MB\n")
     print(f"{'precision':10s}{'weight MB':>11s}{'vs fp16':>9s}{'action rMSE':>13s}{'ceiling*':>10s}")
-    print(f"{'fp16':10s}{fp16_bytes/1e6:11.2f}{'1.00x':>9s}{'—':>13s}{'1.00x':>10s}")
+    print(f"{'fp16':10s}{fp16_bytes/1e6:11.2f}{'1.00x':>9s}{', ':>13s}{'1.00x':>10s}")
 
     for bits in (8, 4):
         qm = quantize_model(copy.deepcopy(fp), bits)

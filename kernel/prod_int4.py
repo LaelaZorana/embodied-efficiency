@@ -1,15 +1,15 @@
 """
-Production weight-only INT4 path (torchao / Marlin) — the right tool for batch-1
+Production weight-only INT4 path (torchao / Marlin), the right tool for batch-1
 low-bit *latency*, replacing the hand-written kernel that lost to cuBLAS.
 
 HARDWARE: Marlin / torchao-int4 (tinygemm) require Ampere (sm_80+). The free T4 is
 Turing (sm_75) and CANNOT run these kernels ('.m16n8k16 requires sm_80'). This
-benchmark needs an A100 / L4 / A10 / RTX30+ — not a T4. It self-guards and exits
+benchmark needs an A100 / L4 / A10 / RTX30+, not a T4. It self-guards and exits
 cleanly on Turing.
 
 Hypothesis under test: where my hand-written kernel got *worse* with d_model
 (4×→11× slower, see RESULTS.md §2b), a production int4 GEMM should CROSS OVER and
-beat fp16 at larger d — the large-matmul regime Marlin is built for.
+beat fp16 at larger d, the large-matmul regime Marlin is built for.
 
 Run on an Ampere+ GPU:  pip install torchao && python3 kernel/prod_int4.py
 """
@@ -74,7 +74,7 @@ def run(d, steps=10, B=1, dtype=torch.bfloat16):
 if __name__ == "__main__":
     cc = torch.cuda.get_device_capability() if torch.cuda.is_available() else (0, 0)
     if cc[0] < 8:
-        print(f"GPU compute capability {cc} — torchao int4 (Marlin) needs Ampere sm_80+. "
+        print(f"GPU compute capability {cc}, torchao int4 (Marlin) needs Ampere sm_80+. "
               "Turing/T4 cannot run it. Use an A100 / L4 / A10 / RTX30+.")
         raise SystemExit(0)
     try:

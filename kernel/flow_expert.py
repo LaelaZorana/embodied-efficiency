@@ -13,7 +13,7 @@ loop is dominated by kernel-launch overhead + weight-read traffic, not FLOPs.
 That is exactly the regime kernel fusion is made for and that generic
 autoregressive LLM-serving stacks (vLLM / SGLang / TensorRT-LLM) do not target.
 
-Device-agnostic (CPU / MPS / CUDA). Pure PyTorch reference — the Triton
+Device-agnostic (CPU / MPS / CUDA). Pure PyTorch reference, the Triton
 fused-sampler kernel benchmarks *against* this.
 """
 import math

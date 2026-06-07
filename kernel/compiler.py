@@ -4,11 +4,11 @@ Budget-driven autotuning deploy-compiler for VLA flow-matching samplers.
 "NeuroGolf for VLAs": given a deployment budget (latency / memory / fidelity),
 search the efficiency-config space and emit (a) the Pareto frontier and (b) the
 best deployable config under the budget. The search space is exactly the levers
-this repo *measured* — so the findings are baked into the tool:
+this repo *measured*, so the findings are baked into the tool:
 
-  - cuda_graph : on / off          (latency — measured 5.9x win; ~always on)
+  - cuda_graph : on / off          (latency, measured 5.9x win; ~always on)
   - precision  : bf16 / int8 / int4  (bf16 = latency-optimal; int8/int4 = memory
-                 FOOTPRINT, not latency — see RESULTS.md — offered as a footprint lever)
+                 FOOTPRINT, not latency, see RESULTS.md, offered as a footprint lever)
   - steps      : flow-integration steps  (latency <-> action-fidelity tradeoff)
 
 Each config is scored on 3 axes: latency (ms/step), weight footprint (MB), and
@@ -146,7 +146,7 @@ if __name__ == "__main__":
               f"{r['ms_per_step']:>10.4f}{r['weight_mb']:>11.2f}{r['rmse']:>8.4f}")
 
     pf = pareto(res["rows"])
-    print(f"\nPareto frontier ({len(pf)} configs — none beaten on all of latency/footprint/fidelity):")
+    print(f"\nPareto frontier ({len(pf)} configs, none beaten on all of latency/footprint/fidelity):")
     for r in sorted(pf, key=lambda r: r["ms_per_step"]):
         print(f"  {r['precision']} steps={r['steps']} graph={r['graph']}  "
               f"{r['ms_per_step']:.4f} ms/step  {r['weight_mb']:.2f} MB  rMSE {r['rmse']:.4f}")

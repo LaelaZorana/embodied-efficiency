@@ -4,7 +4,7 @@ Used by CI (.github/workflows/ci.yml) and runnable locally:
     python3 kernel/selfcheck.py
 
 GPU-only evals (kernel latency, CUDA-graph capture/stale-input/no-leak) run
-separately on a GPU runner — see .github/workflows/gpu-evals.yml and colab.ipynb.
+separately on a GPU runner, see .github/workflows/gpu-evals.yml and colab.ipynb.
 """
 import copy
 import json
@@ -58,7 +58,7 @@ def main():
     check("cudagraph eager-fallback determinism",
           torch.allclose(gs.run(x0), flow_sample(fp, x0, 10, pkv)))
 
-    # 3b. compiler decision logic (Pareto + budget pick) — pure logic, GPU-free
+    # 3b. compiler decision logic (Pareto + budget pick), pure logic, GPU-free
     from compiler import pareto, pick_config
     rows = [
         {"precision": "bf16", "steps": 10, "graph": True, "ms_per_step": 0.8, "weight_mb": 51, "rmse": 0.000},

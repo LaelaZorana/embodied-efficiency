@@ -10,7 +10,7 @@ plus @triton.autotune over tiles/warps/stages.
   INT4: weights packed 2-per-byte uint8 [N, K//2] (even k low nibble, odd k high),
         unpacked in-kernel via the a_even/a_odd decomposition.
 
-CUDA-graph note: @triton.autotune benchmarks on first call (pytorch #120802 — it
+CUDA-graph note: @triton.autotune benchmarks on first call (pytorch #120802, it
 cannot happen during graph capture). GraphedSampler warms up on a side stream
 before capture, so autotune is cached before the graph is recorded.
 
@@ -32,7 +32,7 @@ except ImportError:
 
 
 # --------------------------------------------------------------------------- #
-# packing / dequant helpers (torch, exact) — also the off-CUDA fallback        #
+# packing / dequant helpers (torch, exact), also the off-CUDA fallback        #
 # --------------------------------------------------------------------------- #
 def _pack_int4(q2d: torch.Tensor) -> torch.Tensor:
     nib = (q2d.to(torch.int16) & 0xF).to(torch.uint8)

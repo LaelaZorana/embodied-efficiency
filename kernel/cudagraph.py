@@ -4,7 +4,7 @@ fused kernels.
 
 Manual capture (NOT torch.compile reduce-overhead) on purpose: torch.compile
 graph-breaks on raw user Triton kernels unless wrapped as torch.library.triton_op,
-so manual CUDAGraph is the robust way to graph a sampler that calls our hand-
+so manual CUDAGraph is the reliable way to graph a sampler that calls our hand-
 written Triton GEMM. CUDA graphs and low-bit quant are *orthogonal* wins: graphs
 remove per-launch CPU overhead (N steps x many small kernels); the kernel cuts
 weight-byte traffic. Combined, they should stack.
@@ -52,9 +52,9 @@ class GraphedSampler:
     def run(self, x):
         if not self.cuda:
             return flow_sample(self.expert, x, self.n, self.prefix_kv)
-        self.static_in.copy_(x)          # never trust the new tensor's address — copy in
+        self.static_in.copy_(x)          # never trust the new tensor's address, copy in
         self.graph.replay()
-        return self.static_out.clone()   # storage is reused on next replay — clone out
+        return self.static_out.clone()   # storage is reused on next replay, clone out
 
 
 def _build(bits=None, device="cuda", seed=0):

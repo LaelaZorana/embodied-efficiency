@@ -23,7 +23,7 @@ import torch
 from flow_expert import ActionExpertConfig, ActionExpert, flow_sample
 
 # Approx hardware peaks for the roofline ridge point (FLOP/byte = peak_flops/peak_bw).
-DEVICE_PEAKS = {  # (peak TFLOP/s, peak GB/s) — fp16
+DEVICE_PEAKS = {  # (peak TFLOP/s, peak GB/s), fp16
     "T4": (65.0, 320.0),       # Tesla T4 (Colab free) ridge ~= 203 FLOP/byte
     "A100": (312.0, 1555.0),
     "OrinAGX": (170.0, 205.0),  # Jetson Orin AGX (int8/fp16-ish) ridge very high -> memory-bound

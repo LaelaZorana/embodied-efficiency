@@ -1,4 +1,4 @@
-"""Model-size sweep — the decisive test of the corrected diagnosis.
+"""Model-size sweep, the decisive test of the corrected diagnosis.
 
 At d_model=512 the low-bit kernel lost because the per-step matmuls are tiny
 (op-overhead-bound, not weight-bandwidth-bound). The hypothesis: as d_model
@@ -68,5 +68,5 @@ if __name__ == "__main__":
             print(f"{d:>8}{tf:>10.3f}{tq:>10.3f}{tq / tf:>10.2f}x  {verdict}")
         except torch.cuda.OutOfMemoryError:
             torch.cuda.empty_cache()
-            print(f"{d:>8}  OOM — skipped")
+            print(f"{d:>8}  OOM, skipped")
     print("\nint8/fp16 < 1.0 => low-bit wins. Watch for the crossover as d_model grows.")
