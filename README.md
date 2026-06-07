@@ -10,6 +10,8 @@ Kernels, quantization, and a runtime trust layer for vision-language-action (VLA
 
 📄 **Read the thesis →** [THESIS.md](THESIS.md)
 
+🤖 **Try it live →** [interactive demo on Hugging Face](https://huggingface.co/spaces/LaelaZ/embodied-efficiency) (set a budget, watch the compiler pick a config; vet an action through the supervisor)
+
 ## The problem
 
 The frontier of embodied AI used to be whether the model could do the task. It can. The question now is whether it runs on this robot, inside this latency budget and this power envelope, cheaply enough to put a thousand of them in the field. That's an efficiency problem, and the levers that solve it, quantization, CUDA graphs, action chunking, speculative decoding, sit scattered across a year of papers with no agreement on which one actually pays off, because the answer depends on the workload. So this repo measures them on one concrete batch-1 VLA flow-matching sampler and reports the result, what wins (CUDA graphs, 5.9x) and what doesn't (weight-only low-bit, across four experiments), as reproducible tooling rather than paper claims.
