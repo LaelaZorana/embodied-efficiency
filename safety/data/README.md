@@ -40,6 +40,11 @@ presented as real.
 an ROC for the drift detector, picks a data-driven operating point, and reports
 precision / recall / false-positive rate and the catch rate per fault type.
 
+## Also on the Hub
+
+Published as a standalone, viewer-browsable dataset (parquet + this bundle):
+[LaelaZ/vla-action-anomaly-eval](https://huggingface.co/datasets/LaelaZ/vla-action-anomaly-eval).
+
 ## Source & license
 
 Derived from **DROID** (`IPEC-COMMUNITY/droid_lerobot`, the LeRobot port),

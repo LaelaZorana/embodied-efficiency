@@ -56,7 +56,7 @@ The honest question for any such layer is how well its OOD detector actually wor
 - The non-finite and joint-limit checks catch **100%** by construction (they're hard checks).
 - The shipped default threshold (4.0) is **deliberately conservative**: it catches every NaN and over-limit command but only ~11% of soft drift, so it almost never cries wolf. Tuned from the ROC to a 1% false-positive budget (threshold ~2.2), it catches **91% of all faults at 1% false positives**. The point is that the threshold is a tunable operating point with a measured curve, not a guess, and you set it to your fleet's tolerance.
 
-The eval set is real-in-distribution with clearly-labelled synthetic faults (nothing synthetic is dressed up as real), and the drift-detector AUC is checked in CI so it can't silently regress.
+The eval set is real-in-distribution with clearly-labelled synthetic faults (nothing synthetic is dressed up as real), and the drift-detector AUC is checked in CI so it can't silently regress. It's also published as a standalone, viewer-browsable dataset: [LaelaZ/vla-action-anomaly-eval](https://huggingface.co/datasets/LaelaZ/vla-action-anomaly-eval).
 
 ## Reproduce
 
