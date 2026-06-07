@@ -1,0 +1,200 @@
+/* embodied-efficiency design system: the "Deploy Console" identity.
+   This is a robotics deploy tool, so it should read like an instrument panel:
+   a cool slate canvas, an electric indigo -> cyan signal, monospace telemetry
+   readouts, and three honest status colors (go / caution / hold). Distinct on
+   purpose from my warmer projects. Built on Tailwind utilities; this file holds
+   the few bespoke pieces (washes, panels, status lights, meters) utilities can't
+   express well. Light + dark, gentle motion, reduced-motion respected. */
+
+:root {
+  --ee-signal: 99 102 241;        /* indigo-500, primary signal */
+  --ee-signal-deep: 79 70 229;    /* indigo-600, deep */
+  --ee-cyan: 34 211 238;          /* cyan-400, accent */
+
+  /* Honest status bands for the safety layer: go / caution / hold. */
+  --ee-go:   16 185 129;          /* emerald  -> passed, action sent */
+  --ee-warn: 217 160 60;          /* warm amber -> staleness / caution */
+  --ee-hold: 244 100 110;         /* soft rose  -> intervention, held a safe action */
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: "Inter var", Inter, ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3 { letter-spacing: -0.012em; }
+
+/* Telemetry numerals: monospace, tabular, so readouts don't jitter as they
+   update. Every latency / footprint / score number on the page wears this. */
+.ee-mono {
+  font-family: "JetBrains Mono", "SFMono-Regular", ui-monospace, "SF Mono",
+    Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Page wash: a cool signal glow from the corners over a faint blueprint grid.
+   Quiet enough to read over, present enough to feel like a console. */
+.ee-bg {
+  background-color: rgb(248 250 252);            /* slate-50 */
+  background-image:
+    radial-gradient(60rem 60rem at 112% -10%, rgb(var(--ee-cyan) / 0.10), transparent 56%),
+    radial-gradient(54rem 54rem at -12% -6%, rgb(var(--ee-signal) / 0.10), transparent 52%),
+    linear-gradient(to right, rgb(15 23 42 / 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(15 23 42 / 0.035) 1px, transparent 1px);
+  background-size: auto, auto, 2.25rem 2.25rem, 2.25rem 2.25rem;
+}
+.dark .ee-bg {
+  background-color: rgb(8 11 20);
+  background-image:
+    radial-gradient(60rem 60rem at 112% -10%, rgb(var(--ee-cyan) / 0.14), transparent 56%),
+    radial-gradient(54rem 54rem at -12% -6%, rgb(var(--ee-signal) / 0.16), transparent 52%),
+    linear-gradient(to right, rgb(148 163 184 / 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(148 163 184 / 0.06) 1px, transparent 1px);
+}
+
+/* Brand text: an electric indigo -> cyan signal. */
+.ee-gradient-text {
+  background-image: linear-gradient(100deg, rgb(var(--ee-signal-deep)), rgb(var(--ee-cyan)));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Card: an instrument panel. Crisp edge, soft depth, subtle blur. */
+.ee-card {
+  border-radius: 1rem;
+  border: 1px solid rgb(226 232 240);            /* slate-200 */
+  background: rgb(255 255 255 / 0.85);
+  backdrop-filter: blur(7px);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.05), 0 16px 34px -20px rgb(30 41 120 / 0.28);
+}
+.dark .ee-card {
+  border-color: rgb(40 51 74 / 0.8);
+  background: rgb(15 20 33 / 0.62);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.35), 0 16px 38px -20px rgb(0 0 0 / 0.7);
+}
+
+/* Quiet grouped panel (readout strips, log). */
+.ee-panel { background: rgb(241 245 249 / 0.7); }
+.dark .ee-panel { background: rgb(13 19 33 / 0.55); }
+
+/* Status pill / chip. */
+.ee-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 999px;
+  padding: 0.2rem 0.7rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+/* Status light: a glowing console indicator. Colour says go / caution / hold. */
+.ee-light {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 999px;
+  position: relative;
+}
+.ee-light--go   { background: rgb(var(--ee-go));   box-shadow: 0 0 0 3px rgb(var(--ee-go) / 0.18),   0 0 14px rgb(var(--ee-go) / 0.6); }
+.ee-light--warn { background: rgb(var(--ee-warn)); box-shadow: 0 0 0 3px rgb(var(--ee-warn) / 0.18), 0 0 14px rgb(var(--ee-warn) / 0.6); }
+.ee-light--hold { background: rgb(var(--ee-hold)); box-shadow: 0 0 0 3px rgb(var(--ee-hold) / 0.18), 0 0 14px rgb(var(--ee-hold) / 0.6); }
+
+/* Meter: a slim readout bar (used for the Hz gap + budget fill). */
+.ee-meter {
+  height: 0.5rem;
+  border-radius: 999px;
+  background: rgb(226 232 240);
+  overflow: hidden;
+}
+.dark .ee-meter { background: rgb(30 41 59); }
+.ee-meter > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgb(var(--ee-signal)), rgb(var(--ee-cyan)));
+  transition: width .6s cubic-bezier(.22,.61,.36,1);
+}
+.ee-meter--go   > span { background: linear-gradient(90deg, rgb(var(--ee-go) / 0.85),   rgb(var(--ee-go))); }
+.ee-meter--warn > span { background: linear-gradient(90deg, rgb(var(--ee-warn) / 0.85), rgb(var(--ee-warn))); }
+.ee-meter--hold > span { background: linear-gradient(90deg, rgb(var(--ee-hold) / 0.85), rgb(var(--ee-hold))); }
+
+/* Gentle lift on interactive cards. */
+.ee-lift { transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+.ee-lift:hover { transform: translateY(-2px); }
+
+/* Range sliders, styled to the console (the compiler budget knobs). */
+.ee-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: rgb(226 232 240);
+  outline: none;
+}
+.dark .ee-range { background: rgb(30 41 59); }
+.ee-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 999px;
+  background: rgb(var(--ee-signal));
+  border: 2px solid rgb(255 255 255);
+  box-shadow: 0 1px 3px rgb(30 41 120 / 0.4);
+  cursor: pointer;
+  transition: transform .12s ease;
+}
+.ee-range::-webkit-slider-thumb:hover { transform: scale(1.12); }
+.ee-range::-moz-range-thumb {
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 999px;
+  background: rgb(var(--ee-signal));
+  border: 2px solid rgb(255 255 255);
+  cursor: pointer;
+}
+.dark .ee-range::-webkit-slider-thumb { border-color: rgb(15 20 33); }
+.dark .ee-range::-moz-range-thumb { border-color: rgb(15 20 33); }
+
+/* htmx loading affordance. */
+.htmx-indicator { opacity: 0; transition: opacity .15s ease; }
+.htmx-request .htmx-indicator { opacity: 1; }
+.htmx-request.htmx-indicator { opacity: 1; }
+.htmx-request button[type="submit"] { opacity: .65; pointer-events: none; }
+
+/* Fade-in for swapped / new content. */
+@keyframes ee-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.ee-fade { animation: ee-fade-in .28s cubic-bezier(.22,.61,.36,1) both; }
+
+/* Slow pulse for the "live" dot: a steady heartbeat. */
+@keyframes ee-breathe {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.5; transform: scale(0.82); }
+}
+.ee-breathe { animation: ee-breathe 3s ease-in-out infinite; }
+
+/* Focus ring: signal indigo, clearly visible. */
+.ee-focus:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(var(--ee-signal) / 0.45);
+}
+
+/* Pareto plot points: a soft hover grow. */
+.ee-dot { transition: r .12s ease, opacity .12s ease; cursor: pointer; }
+.ee-dot:hover { opacity: 1 !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ee-fade, .ee-breathe, .ee-meter > span, .ee-lift, .ee-dot { animation: none; transition: none; }
+}

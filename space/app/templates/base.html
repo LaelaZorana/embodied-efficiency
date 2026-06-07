@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en" class="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}embodied-efficiency: run the VLA on the robot, not just in the demo{% endblock %}</title>
+  <meta name="description" content="A deploy console for vision-language-action models: set a latency and footprint budget and a compiler picks the best config off a real GPU Pareto frontier, then a runtime safety supervisor vets every action before it reaches a motor." />
+
+  <!-- Vendored offline: Tailwind (Play CDN, JIT) + htmx. No network required. -->
+  <script src="/static/vendor/tailwind.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Inter var"', "Inter", "ui-sans-serif", "system-ui",
+                   "-apple-system", "Segoe UI", "Roboto", "Helvetica", "Arial", "sans-serif"],
+            mono: ['"JetBrains Mono"', "SFMono-Regular", "ui-monospace", "SF Mono",
+                   "Menlo", "Consolas", "monospace"],
+          },
+          colors: {
+            // Deploy Console: an electric indigo signal.
+            signal: {
+              50: "#eef2ff", 100: "#e0e7ff", 200: "#c7d2fe", 300: "#a5b4fc",
+              400: "#818cf8", 500: "#6366f1", 600: "#4f46e5", 700: "#4338ca",
+              800: "#3730a3", 900: "#312e81",
+            },
+            // Cyan accent: the live readout colour.
+            cyan2: {
+              50: "#ecfeff", 100: "#cffafe", 200: "#a5f3fc", 300: "#67e8f9",
+              400: "#22d3ee", 500: "#06b6d4", 600: "#0891b2", 700: "#0e7490",
+              800: "#155e75", 900: "#164e63",
+            },
+          },
+        },
+      },
+    };
+  </script>
+  <script src="/static/vendor/htmx.min.js" defer></script>
+
+  <link rel="stylesheet" href="/static/css/app.css" />
+  <script src="/static/js/app.js"></script>
+
+  <!-- Deploy mark: a signal waveform stepping up, the latency budget met. -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234f46e5' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 17l4-8 4 5 3-6 4 9'/></svg>" />
+</head>
+<body class="ee-bg min-h-screen text-slate-800 dark:text-slate-200 antialiased flex flex-col">
+
+  {% include "partials/nav.html" %}
+
+  <main class="mx-auto w-full max-w-6xl flex-1 px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+    {% block content %}{% endblock %}
+  </main>
+
+  {% include "partials/footer.html" %}
+
+</body>
+</html>

@@ -51,6 +51,7 @@ It carries what the experiments proved: CUDA graphs and action-chunking buy late
 - **CPU evals (free, automatic):** every push runs `kernel/selfcheck.py` via [`ci.yml`](.github/workflows/ci.yml), checking quant fidelity, kernel fallback numerics, and no-leak determinism. Run it locally with `python3 kernel/selfcheck.py`.
 - **GPU latency and evals:** [`RUN_ON_T4.md`](RUN_ON_T4.md), about 10 minutes on a free Colab T4 via [`colab.ipynb`](colab.ipynb).
 - **Deploy-compiler:** `python3 kernel/compiler.py`, prints the Pareto report and the budget picks (footprint and fidelity real anywhere, latency real on CUDA).
+- **The live demo:** its full source is in [`space/`](space/), a FastAPI plus htmx console (one Docker container, no API key) that drives the compiler against the real-L4 frontier and runs the actual supervisor live. `cd space && docker build -t ee . && docker run -p 7860:7860 ee`.
 
 ## Principles
 
