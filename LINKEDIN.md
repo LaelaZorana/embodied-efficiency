@@ -1,16 +1,20 @@
-# LinkedIn cut — professional register (~210 words)
+# LinkedIn cut — results-backed (post-investigation, ~230 words)
 
-*(For LinkedIn / recruiter + peer audience. More measured than the X thread; same thesis, same bridge, softer CTA.)*
+*(Professional register. Repo: github.com/LaelaZorana/embodied-efficiency)*
 
 ---
 
-**The bottleneck in robotics isn't capability anymore. It's deployment.**
+**The bottleneck in robotics isn't capability anymore — it's deployment.**
 
-A vision-language-action model can follow a spoken instruction and manipulate objects in a lab demo today. Put it on the actual robot and it stalls — end-to-end inference runs at 3–5 Hz, while smooth control needs 50–100 Hz. That gap isn't about whether the model can reason. It's about whether it can run on the hardware the robot carries, under a real latency and power budget.
+A vision-language-action model can follow a spoken instruction and manipulate objects in a lab demo today. Put it on the actual robot and it stalls: end-to-end inference runs at 3–5 Hz, while smooth control needs 50–100 Hz. Closing that gap is an efficiency problem — kernels, quantization, scheduling — and it's one of the most under-staffed layers in the stack.
 
-That's an efficiency problem — kernels, quantization, scheduling, compilation — and it's one of the most under-staffed layers in the stack, even as inference heads toward two-thirds of all AI compute.
+So I built the deploy layer for a VLA flow-matching action sampler and *measured* it on real GPUs, with every number gated by correctness and memory-leak checks. Two findings, reported straight:
 
-It's also where I've decided to put my work. I spent the last cycle golfing neural networks to their minimum viable size under hard correctness budgets (ARC-AGI). Fitting a VLA under a latency budget is the same search — knowing where precision is free and where it's load-bearing. I'm now building that out for physical AI: Triton/CUDA kernels and quantization for on-robot inference, with a runtime trust layer (statistically certified non-regression + intervention logging) so these systems can be deployed *and* governed.
+✅ **The win — CUDA graphs:** 4.82 → 0.82 ms/step (**5.9×**), beating torch.compile's graph mode, leak-free and correct.
+
+❌ **The negative I chased to the end:** I expected weight-only INT4 to win. My hand kernel lost to cuBLAS; a tensor-core + autotune rewrite didn't help; a size sweep made it worse. So I tested the *production* path — torchao/Marlin INT4 on a supported L4 — and it lost too (1.2–1.6× slower). Four experiments, one conclusion: it was never the implementation. Batch-1 VLA isn't the regime weight-only int4 is built for; low-bit here is a memory-footprint lever, not a latency one.
+
+Full write-up, code, and reproducible evals: github.com/LaelaZorana/embodied-efficiency
 
 If you're building robots and fighting the deploy gap — or working the same edge from the model side — I'd genuinely like to compare notes.
 
