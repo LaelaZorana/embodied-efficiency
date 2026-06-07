@@ -61,18 +61,41 @@ def main():
     # 3b. compiler decision logic (Pareto + budget pick), pure logic, GPU-free
     from compiler import pareto, pick_config
     rows = [
-        {"precision": "bf16", "steps": 10, "graph": True, "ms_per_step": 0.8, "weight_mb": 51, "rmse": 0.000},
-        {"precision": "int8", "steps": 10, "graph": True, "ms_per_step": 4.5, "weight_mb": 26, "rmse": 0.003},
-        {"precision": "int4", "steps": 10, "graph": True, "ms_per_step": 6.2, "weight_mb": 13, "rmse": 0.040},
-        {"precision": "int8", "steps": 2, "graph": False, "ms_per_step": 9.0, "weight_mb": 26, "rmse": 0.250},  # dominated
+        {"precision": "bf16", "ms_per_action": 0.8, "weight_mb": 51, "rmse": 0.000, "staleness": 0},
+        {"precision": "int8", "ms_per_action": 4.5, "weight_mb": 26, "rmse": 0.003, "staleness": 0},
+        {"precision": "int4", "ms_per_action": 6.2, "weight_mb": 13, "rmse": 0.040, "staleness": 0},
+        {"precision": "int8", "ms_per_action": 9.0, "weight_mb": 26, "rmse": 0.250, "staleness": 0},  # dominated
     ]
     pf = pareto(rows)
     check("compiler pareto drops dominated config", len(pf) == 3 and rows[3] not in pf)
-    lat = pick_config(rows, {"objective": "ms_per_step", "max_rmse": 0.05})
+    lat = pick_config(rows, {"objective": "ms_per_action", "max_rmse": 0.05})
     check("compiler picks latency-optimal under fidelity budget", lat["precision"] == "bf16")
     foot = pick_config(rows, {"objective": "weight_mb", "max_rmse": 0.05})
     check("compiler picks footprint-optimal under fidelity budget", foot["precision"] == "int4")
     check("compiler returns None when infeasible", pick_config(rows, {"max_weight_mb": 5}) is None)
+    stale_rows = [
+        {"precision": "bf16", "ms_per_action": 0.5, "weight_mb": 51, "rmse": 0.0, "staleness": 49},
+        {"precision": "bf16", "ms_per_action": 6.0, "weight_mb": 51, "rmse": 0.0, "staleness": 0},
+    ]
+    check("compiler respects staleness budget",
+          pick_config(stale_rows, {"objective": "ms_per_action", "max_staleness": 0})["staleness"] == 0)
+
+    # 3c. safety supervisor: in-distribution passes; NaN and out-of-bounds get caught
+    import numpy as np
+    import sys
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "safety"))
+    from supervisor import Supervisor, SupervisorConfig
+    rng = np.random.default_rng(0)
+    A = 7
+    scfg = SupervisorConfig(action_low=np.full(A, -1.0), action_high=np.full(A, 1.0))
+    sup = Supervisor(scfg).calibrate(rng.normal(0, 0.25, (1500, A)).clip(-1, 1))
+    clean = sum(sup.step(rng.normal(0, 0.25, A).clip(-1, 1))[1] is None for _ in range(300))
+    check("supervisor passes in-distribution actions", clean >= 295)
+    _, iv_nan = sup.step(np.full(A, np.nan))
+    check("supervisor catches NaN and sends a finite action", iv_nan is not None and "nonfinite" in iv_nan.reasons)
+    _, iv_ood = sup.step(np.full(A, 5.0))
+    check("supervisor catches out-of-bounds", iv_ood is not None and len(iv_ood.reasons) > 0)
+    check("supervisor logs interventions", sup.report()["interventions"] >= 2)
 
     # 4. notebook is valid JSON
     nb = os.path.join(os.path.dirname(__file__), "..", "colab.ipynb")
