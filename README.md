@@ -12,7 +12,7 @@ Kernels, quantization, and the runtime trust layer for vision-language-action (V
 
 ## The problem
 
-The frontier of embodied AI is no longer "can the model do it." It's: *can it run on this robot, under this latency budget, inside this power envelope, cheaply enough to deploy at scale?* The levers exist — INT8 holds ~97% of task success, INT4 buys ~2.5× speedup, action chunking and speculative decoding cut latency — but they live scattered across papers, not as reproducible tooling on the hardware robots actually carry (Jetson Orin/Thor, single-digit-watt silicon). This repo closes that gap.
+The frontier of embodied AI is no longer "can the model do it." It's: *can it run on this robot, under this latency budget, inside this power envelope, cheaply enough to deploy at scale?* The candidate levers — quantization, CUDA graphs, action chunking, speculative decoding — live scattered across papers, and **which ones actually pay off is workload-dependent**. This repo *measures* them on a concrete batch-1 VLA flow-matching sampler — reporting what wins (CUDA graphs, 5.9×) and what doesn't (weight-only low-bit, across 4 experiments) as reproducible tooling rather than paper claims.
 
 ## What's here
 
