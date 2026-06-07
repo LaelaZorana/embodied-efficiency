@@ -96,6 +96,23 @@ def main():
     _, iv_ood = sup.step(np.full(A, 5.0))
     check("supervisor catches out-of-bounds", iv_ood is not None and len(iv_ood.reasons) > 0)
     check("supervisor logs interventions", sup.report()["interventions"] >= 2)
+    # robustness (audit fixes): malformed shape, too-small calibration, capped log with exact counts
+    _, iv_bad = sup.step(np.zeros(3))
+    check("supervisor handles a wrong-shape action without crashing",
+          iv_bad is not None and "bad_shape" in iv_bad.reasons)
+    try:
+        Supervisor(scfg).calibrate(np.zeros((2, A)))
+        small_raises = False
+    except ValueError:
+        small_raises = True
+    check("supervisor rejects a too-small calibration set", small_raises)
+    cap = Supervisor(SupervisorConfig(action_low=np.full(A, -1.0), action_high=np.full(A, 1.0), max_log=50))
+    cap.calibrate(rng.normal(0, 0.15, (1500, A)).clip(-1, 1))
+    for _ in range(500):
+        cap.step(np.full(A, np.nan))
+    crep = cap.report()
+    check("supervisor caps its log but keeps exact counts",
+          crep["logged"] <= 50 and crep["interventions"] == 500)
 
     # 4. notebook is valid JSON
     nb = os.path.join(os.path.dirname(__file__), "..", "colab.ipynb")

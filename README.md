@@ -55,7 +55,7 @@ It carries what the experiments proved: CUDA graphs and action-chunking buy late
 ## Principles
 
 - **Measure first.** Benchmark against strong baselines (`torch.compile` plus CUDA graphs), never strawmen.
-- **Honest claims.** Statistically certified non-regression on a declared distribution, never "provable."
+- **Honest claims.** Every number comes from real hardware, and I never call a result "provable" for an open-world policy, only measured, or statistical with the distribution stated.
 - **Vendor-neutral and reproducible**, on the hardware robots actually carry.
 
 ## Background
