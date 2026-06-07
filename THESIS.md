@@ -1,54 +1,27 @@
-# Everyone Can Train a VLA. Almost Nobody Can Ship One.
+# Training the VLA is the easy part
 
-*Why efficiency — not capability — is the real bottleneck in embodied AI, and what I'm building at that edge.*
+A vision-language-action model can fold laundry and follow a spoken instruction in a lab demo today. Then you put it on the actual robot, and it stalls. Not because it can't do the task, but because it can't do it fast enough. End to end, the model thinks about 3 to 5 times a second on a research GPU, and a robot arm needs 50 to 100. That gap is the whole problem, and almost none of it is about whether the model is smart.
 
----
+So the question at the frontier of embodied AI isn't "can the model do it" anymore. It's whether it can run on this robot, inside this latency budget and this power envelope, cheaply enough to put a thousand of them on a floor. That's an efficiency problem, it's the least glamorous layer in the stack, and it's the one almost nobody staffs.
 
-A vision-language-action model can fold laundry, sort parts, and follow a spoken instruction in a lab demo today. Then you put it on the actual robot and it falls apart — not because it can't do the task, but because it can't do it *fast enough*. End-to-end VLA inference runs at **3–5 Hz** on a research GPU. A robot arm needs **50–100 Hz** to move smoothly. That's not a capability gap. It's a deploy gap.
+## What I measured
 
-The frontier of embodied AI is no longer "can the model do it." It's: *can the model do it on this robot, under this latency budget, inside this power envelope, cheaply enough to deploy a thousand of them?* That's an efficiency problem — kernels, quantization, scheduling, compilation — and it's the least glamorous and most under-staffed layer in the entire stack.
+I wanted to know which efficiency levers actually pay off here, so I built the deploy layer for the piece that runs every control step, the flow-matching action sampler, and I measured it on real GPUs. Every number is checked against the unquantized model and against a memory-leak test, because a fast kernel that quietly corrupts an action is worse than a slow one.
 
-## The prize is real, and it's measurable
+The clean win was CUDA graphs. When you capture the whole sampling loop as one replayable graph, it drops from 4.8 milliseconds per step to 0.82, almost six times faster, and the captured run matches the original exactly with nothing leaking between replays.
 
-We already know efficiency buys you the robot. INT8 quantization keeps roughly **97% of task success** on manipulation while slashing memory and latency. INT4 on open VLAs has hit **~2.5× speedup and energy savings** over BF16. Action chunking, real-time chunking, speculative decoding, fused flow-matching kernels — the toolkit to close the 3-Hz-to-100-Hz gap already exists, scattered across a year of papers.
+Then the lever I bet on didn't work, and I chased that all the way down. I expected weight-only int4 to win, because reading a quarter of the weight bytes should cost less. My hand-written kernel lost to the standard one. I rewrote it to run on the tensor cores and tune itself, and nothing moved. I grew the model from small to large expecting a crossover, and the gap got worse instead. So I stopped blaming my own code and ran the production kernel, torchao's int4, on the hardware it's built for, and it lost too, somewhere between 1.2 and 1.6 times slower than plain bf16 at every size.
 
-What's missing isn't the ideas. It's the *engineering*: making those techniques reproducible, vendor-neutral, and deployable on the hardware robots actually carry — Jetson Orin and Thor, custom silicon running at single-digit watts — without losing the fine-dexterity that made the model worth deploying in the first place.
+Four tries, one answer. It was never my kernel. Weight-only int4 is built for a different job, generating one token at a time out of a huge language model, where reading the weights is basically the whole cost. A batch-of-one robot sampler is small matrices plus a lot of work that isn't matrix-multiply at all, and there the ordinary bf16 path wins. So low-bit here buys you a smaller model on the device, not a faster one. That's worth knowing before you spend a week building the wrong kernel.
 
-## A field saturated with attention, starved of people
+## Where this comes from
 
-Inference is on track to be **two-thirds of all AI compute** by the end of 2026, and the industry is in an open bidding war for engineers who can write a genuinely fast kernel. Here's the thing about this layer: knowing FP8 exists is easy. Getting a flow-matching action head to run in budget — knowing where you can quantize aggressively and where a single wrong bit breaks the whole policy — is hard, and rare. The topic is crowded with words and money. The work is starved of people who can actually do it.
+I came to this from competition ML, golfing networks down to the smallest size that still solves a task exactly. It's the same instinct, really: find where precision is free, and where one wrong bit breaks the whole thing.
 
-## How I got here (the part that's not a coincidence)
-
-I came to this sideways. For the last cycle I've been **golfing neural networks** — building the *smallest possible* ONNX graphs that still solve ARC-AGI reasoning tasks *exactly*, scored on a hard budget of parameters and memory. It sounds like a puzzle. It's the same problem.
-
-"Fit a correct solution under a hard size budget" and "fit a VLA under a hard latency budget" are the same search, the same instinct for where precision is free and where it's load-bearing. I spent months developing that instinct against an unforgiving scorer. I'm now pointing it at robots.
-
-## What I'm building
-
-So that's the work:
-
-- **A budget-driven autotuning compiler for VLAs.** You hand it a target — *"100 Hz on an Orin, under 15 watts"* — and it searches the precision × chunk-size × pruning space and hands back the deployable engine, not just a benchmark row. The papers *measure* efficiency; almost nobody ships the *search* that picks the right configuration for *your* robot.
-- **A small set of Triton kernels** for the VLA-specific gaps the generic LLM-serving stacks (vLLM, SGLang, TensorRT-LLM) don't cover: fused flow-matching/diffusion sampling, INT4 multimodal token paths, chunked-decode KV reuse.
-
-## First results (measured, not promised)
-
-I started at the bottom of that stack — the flow-matching sampling loop — and measured everything on a free T4, with correctness and memory-leak checks gating every number.
-
-**The win: CUDA graphs.** Capturing the N-step sampler in a CUDA graph took it from **4.82 → 0.82 ms/step (5.9×)**, beating `torch.compile`'s own graph mode, with exact replay and zero memory leak.
-
-**The honest negative: weight-only low-bit didn't pay off — and I chased it to the end.** I expected INT8/INT4 weight quantization to win in this memory-bound regime. It didn't — my hand-written kernel was slower than cuBLAS. I rewrote it for tensor cores + autotuning: no change. I swept model size 512→4096 expecting a crossover: the gap *widened*. So I stopped blaming my kernel and tested the **production** path — torchao's Marlin int4 on a supported L4 — and **it lost too** (1.2–1.6× slower than bf16 at every size). Four experiments, one conclusion: it was never the implementation. Weight-only int4 is engineered for M=1 LLM *decode* of huge models, where weight reads dominate; a batch-1 VLA sampler (small skinny GEMMs + heavy non-GEMM per-step work) is a different regime, and bf16 tensor cores win. Low-bit here is a memory-*footprint* lever, not a latency one.
-
-I'm reporting the negative as plainly as the win. Knowing *where the lever isn't* is half of performance engineering.
+That instinct is now a small tool. You give it a budget, a latency ceiling or a memory ceiling, and it searches the precision, the number of integration steps, and whether to capture the graph, then it hands back the configuration that fits and the ones it traded off against. Ask it for the fastest model and it picks bf16 with graphs; ask it for the smallest and it picks int4, about seven times lighter for a few percent of action error. What it learned from the experiments is built in.
 
 ## Where it points
 
-And then the part that matters the moment these systems are actually autonomous: a thin **runtime trust layer**. Not red-teaming, not another eval harness — *statistically certified non-regression* on a declared distribution, OOD abstention, and intervention logging. The telemetry that lets a hospital-logistics robot or a factory humanoid be both **deployed and governed** under frameworks like the FDA's device-lifecycle guidance or the EU AI Act.
+The part I care about next is what happens once these systems run on their own. A thin layer that watches the policy in real time, notices when it's drifting somewhere it was never trained, falls back to something safe, and keeps a record a regulator can actually read. Efficiency is what gets the model onto the robot. That layer is what lets it stay there.
 
-Efficiency is what gets the model onto the robot. The trust layer is what lets it stay there.
-
----
-
-Embodied AI's headlines are about capability. The bottleneck is efficiency — and a trust layer is what makes efficiency *deployable*. That intersection, **kernels and quantization for physical AI with safety baked in**, is where I'm putting my work.
-
-If you're building robots and fighting the deploy gap, or working the same edge from the lab side, I'd like to compare notes.
+If you're fighting the same deploy gap, or working it from the model side, I'd like to compare notes. The code, the numbers, and the failures are all in the open: [github.com/LaelaZorana/embodied-efficiency](https://github.com/LaelaZorana/embodied-efficiency)

@@ -1,21 +1,19 @@
-# LinkedIn cut — results-backed (post-investigation, ~230 words)
+# LinkedIn — Laela's voice (results-backed, zero em-dashes)
 
-*(Professional register. Repo: github.com/LaelaZorana/embodied-efficiency)*
+*(Repo: github.com/LaelaZorana/embodied-efficiency)*
 
 ---
 
-**The bottleneck in robotics isn't capability anymore — it's deployment.**
+Training a vision-language-action model is the easy part now.
 
-A vision-language-action model can follow a spoken instruction and manipulate objects in a lab demo today. Put it on the actual robot and it stalls: end-to-end inference runs at 3–5 Hz, while smooth control needs 50–100 Hz. Closing that gap is an efficiency problem — kernels, quantization, scheduling — and it's one of the most under-staffed layers in the stack.
+It can fold laundry and follow a spoken instruction in a lab demo. Then you put it on the real robot and it stalls, not because it can't do the task, but because it can't do it fast enough. The model thinks 3 to 5 times a second, and the arm needs 50 to 100. That gap is the whole problem, and almost none of it is about whether the model is smart.
 
-So I built the deploy layer for a VLA flow-matching action sampler and *measured* it on real GPUs, with every number gated by correctness and memory-leak checks. Two findings, reported straight:
+So I built the deploy layer for the part that runs every control step, the flow-matching action sampler, and measured it on real GPUs, with every number checked against the full-precision model and a memory-leak test.
 
-✅ **The win — CUDA graphs:** 4.82 → 0.82 ms/step (**5.9×**), beating torch.compile's graph mode, leak-free and correct.
+The clean win was CUDA graphs. When you capture the whole loop as one replayable graph, it drops from 4.8 to 0.82 milliseconds per step, almost six times faster, and it matches the original exactly.
 
-❌ **The negative I chased to the end:** I expected weight-only INT4 to win. My hand kernel lost to cuBLAS; a tensor-core + autotune rewrite didn't help; a size sweep made it worse. So I tested the *production* path — torchao/Marlin INT4 on a supported L4 — and it lost too (1.2–1.6× slower). Four experiments, one conclusion: it was never the implementation. Batch-1 VLA isn't the regime weight-only int4 is built for; low-bit here is a memory-footprint lever, not a latency one.
+The lever I bet on, weight-only int4, didn't work. My hand kernel lost to the standard one, a tensor-core rewrite didn't move it, a size sweep made it worse, and even the production kernel on the hardware it was built for came in 1.2 to 1.6 times slower than bf16. Four tries, one answer: it was never my kernel. Int4 is built for generating one token at a time out of a huge model, not a batch-of-one robot sampler. Low-bit here buys you a smaller model, not a faster one.
 
-Full write-up, code, and reproducible evals: github.com/LaelaZorana/embodied-efficiency
+The code, the numbers, and the failures are all open: github.com/LaelaZorana/embodied-efficiency
 
-If you're building robots and fighting the deploy gap — or working the same edge from the model side — I'd genuinely like to compare notes.
-
-*#EmbodiedAI #Robotics #GPU #Inference #VLA*
+If you're fighting the same deploy gap, I'd like to compare notes.

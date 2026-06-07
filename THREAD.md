@@ -1,48 +1,49 @@
-# X thread — results-backed cut (post-investigation)
+# X thread — Laela's voice (results-backed)
 
 *(8 posts, ≤280 chars each. Repo: github.com/LaelaZorana/embodied-efficiency)*
 
 ---
 
 **1/**
-Everyone can train a vision-language-action model now. Almost nobody can ship one.
+A vision-language-action model can fold laundry in a lab demo today. Put it on the actual robot and it stalls.
 
-The bottleneck isn't capability — it's deploy. End-to-end VLA inference runs at 3–5 Hz; a robot arm needs 50–100 Hz. That gap is the whole game.
+Not because it can't do the task, but because it can't do it fast enough: it thinks 3–5 times a second, the arm needs 50–100.
 
-So I built the deploy layer and *measured* it. 🧵
+Training was the easy part. 🧵
 
 **2/**
-Target: the flow-matching action sampler that runs every control step on a π0/GR00T-style VLA. I benchmarked it on real GPUs (T4 + L4), every number gated by correctness + memory-leak checks.
+So I built the deploy layer for the piece that runs every control step, the flow-matching action sampler, and measured it on real GPUs.
 
-Two findings, reported straight — the win and the one that hurt.
+Every number is checked against the full-precision model and a memory-leak test, because a fast kernel that corrupts an action is worse than a slow one.
 
 **3/**
-✅ The win: **CUDA graphs.**
-Capturing the N-step sampler in a CUDA graph: 4.82 → 0.82 ms/step — **5.9×**, beating torch.compile's own graph mode, with exact replay and zero memory leak.
+The clean win was CUDA graphs.
+
+Capture the whole sampling loop as one replayable graph and it drops from 4.8 ms per step to 0.82. Almost six times faster, the captured run matches the original exactly, with nothing leaking between replays.
 
 **4/**
-❌ The negative — and I chased it to the end.
-I bet weight-only INT4 would win in this memory-bound regime. My hand-written Triton kernel lost to cuBLAS. Tensor cores + autotune: no change. Size sweep 512→4096: it got *worse*.
+Then the lever I bet on didn't work.
+
+I expected weight-only int4 to win, because reading a quarter of the weight bytes should cost less. My hand kernel lost to the standard one. I rewrote it for the tensor cores and let it tune itself. Nothing moved.
 
 **5/**
-So I stopped blaming my kernel and tested the **production** path — torchao's Marlin INT4 on a supported L4 (Ada).
+I grew the model small to large expecting a crossover, and the gap got worse instead.
 
-It lost too. 1.2–1.6× *slower* than bf16 at every size.
-
-4 experiments, one answer: it was never the implementation.
+So I stopped blaming my own code and ran the production kernel, torchao's int4, on the hardware it's built for. It lost too: 1.2 to 1.6 times slower than plain bf16 at every size.
 
 **6/**
-Why: weight-only int4 is built for M=1 LLM *decode* of huge models, where weight reads dominate. A batch-1 VLA sampler — small skinny GEMMs + heavy non-GEMM per-step work — is a different regime, and bf16 tensor cores win.
+Four tries, one answer. It was never my kernel.
 
-Low-bit here = memory footprint, not speed.
+Weight-only int4 is built for generating one token at a time out of a huge language model, where reading the weights is the whole cost. A batch-of-one robot sampler isn't that. So low-bit here buys a smaller model, not a faster one.
 
 **7/**
-I came to this from competition ML — golfing neural nets to their minimum size under hard correctness budgets (ARC-AGI). Same instinct: where is precision free, where is it load-bearing.
+I came to this from competition ML, golfing networks down to the smallest size that still solves a task exactly.
 
-Knowing *where the lever isn't* is half of performance engineering.
+Same instinct: find where precision is free, and where one wrong bit breaks the whole thing. That instinct is now a tool that picks the config for your budget.
 
 **8/**
-Repo (public, CI-green, reproducible — notebooks + evals):
-github.com/LaelaZorana/embodied-efficiency
+The code, the numbers, and the failures are all in the open.
 
-Building robots and fighting the deploy gap, or working the same edge from the lab side? Let's compare notes. ↓
+If you're fighting the same deploy gap, or working it from the model side, I'd like to compare notes.
+
+github.com/LaelaZorana/embodied-efficiency ↓
