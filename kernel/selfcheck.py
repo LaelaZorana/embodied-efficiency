@@ -114,6 +114,22 @@ def main():
     check("supervisor caps its log but keeps exact counts",
           crep["logged"] <= 50 and crep["interventions"] == 500)
 
+    # 3d. supervisor eval set: the drift detector separates normal vs drift
+    # (real DROID actions + injected faults; built by safety/make_eval_set.py)
+    eval_npz = os.path.join(os.path.dirname(__file__), "..", "safety", "data", "supervisor_eval.npz")
+    if os.path.exists(eval_npz):
+        from evaluate import roc as _roc
+        dd = np.load(eval_npz)
+        se = Supervisor(SupervisorConfig(action_low=dd["action_low"].astype(float),
+                                         action_high=dd["action_high"].astype(float))
+                        ).calibrate(dd["calib_actions"].astype(float))
+        sc = np.array([se.drift_score(a) for a in dd["eval_action"].astype(float)])
+        ft = dd["eval_ftype"]
+        _, _, _, auc = _roc(sc[ft == 0], sc[ft == 3])
+        check("supervisor drift detector AUC > 0.9 on the eval set", auc > 0.9, f"AUC={auc:.3f}")
+    else:
+        print("[skip] supervisor eval set absent (run safety/make_eval_set.py)")
+
     # 4. notebook is valid JSON
     nb = os.path.join(os.path.dirname(__file__), "..", "colab.ipynb")
     try:

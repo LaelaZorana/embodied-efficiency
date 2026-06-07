@@ -14,7 +14,12 @@ What it checks, on every action:
   - in-bounds: every dimension stays inside the action limits.
   - drift (OOD): how far the action sits from the calibration set, as a per-dim
     z-score pooled into one distance. This is a deliberately simple v0 (diagonal
-    Gaussian); it catches gross drift, not subtle correlated shifts.
+    Gaussian); it catches gross drift, not subtle correlated shifts. The
+    drift_thresh isn't a guess: evaluate.py sweeps it against a labelled set
+    (real DROID actions + injected faults) to pick an operating point. On DROID
+    the detector scores AUC 0.99, and a threshold of ~2.2 catches 91% of faults
+    at a 1% false-positive rate; the shipped default (4.0) is conservative on
+    purpose, so tune it to your fleet with evaluate.py.
   - jerk: how big the jump is from the last accepted action, against the
     calibration jerk.
 
@@ -82,6 +87,21 @@ class Supervisor:
 
     def _pooled_z(self, x, mean, std):
         return float(np.sqrt(np.mean(((x - mean) / std) ** 2)))
+
+    def drift_score(self, action):
+        """Pooled z-distance of an action from the calibration set, read-only.
+
+        Same quantity step() thresholds for drift (computed on the in-bounds
+        action), but with no side effects, so you can sweep a threshold over a
+        labelled set to get an ROC. Non-finite or wrong-shape actions score inf.
+        """
+        if self._mean is None:
+            raise RuntimeError("calibrate() before scoring")
+        a = np.asarray(action, dtype=np.float64).reshape(-1)
+        if a.size != self._mean.size or not np.all(np.isfinite(a)):
+            return float("inf")
+        clipped = np.clip(a, self.cfg.action_low, self.cfg.action_high)
+        return self._pooled_z(clipped, self._mean, self._std)
 
     def _safe_out(self):
         if self._last_safe is not None:
