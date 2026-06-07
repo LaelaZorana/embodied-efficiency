@@ -21,7 +21,7 @@ The frontier of embodied AI is no longer "can the model do it." It's: *can it ru
 | **Thesis** | Why efficiency, not capability, is the bottleneck | ✅ [THESIS.md](THESIS.md) |
 | **CUDA-graph sampler** | manual graph capture of the N-step flow loop | ✅ **5.9× measured on T4** ([RESULTS.md](kernel/RESULTS.md)) |
 | **Low-bit weight quant** | hand kernel + production torchao/Marlin int4 | 🔬 investigated → **negative** (slower than bf16 even on a supported L4; see findings) |
-| **Autotuning deploy-compiler** | budget in (*"100 Hz on an Orin, <15 W"*) → deployable engine out | 📋 in design |
+| **Autotuning deploy-compiler** | budget in → Pareto frontier + best config out; searches precision × steps × cuda-graph | ✅ **v0** — [kernel/compiler.py](kernel/compiler.py) |
 | **Runtime trust layer** | statistically certified non-regression + OOD abstention + intervention logging | 🔜 planned |
 
 ## Findings (measured on T4 + L4 — full data in [kernel/RESULTS.md](kernel/RESULTS.md))
@@ -30,9 +30,21 @@ The frontier of embodied AI is no longer "can the model do it." It's: *can it ru
 - 🔬 **Weight-only low-bit gives no batch-1 latency win — a rigorously characterized negative across 4 experiments.** Hand-written INT8/INT4 Triton kernel lost to cuBLAS; tensor-core + autotune rewrite didn't help; a 512→4096 size sweep made it *worse*; and the **production path (torchao/Marlin int4) on a supported L4 (Ada) lost too** — 1.2–1.6× slower than bf16 at every size. So it's not an implementation gap: a batch-1 VLA sampler (small skinny GEMMs + heavy non-GEMM per-step work) isn't the regime weight-only int4 is built for (M=1 LLM decode of huge models). Low-bit here is a memory-*footprint* lever (int8 2× / int4 4× smaller, ≤5% action error), not a latency one.
 - Method: every number gated by correctness + stale-input + no-leak evals; four experiments, win and negative reported alike.
 
+## Deploy-compiler (v0)
+
+The findings above aren't just a report — they're baked into a budget-driven autotuner ([`kernel/compiler.py`](kernel/compiler.py)). Give it a deployment budget; it searches **precision × steps × cuda-graph**, scores every config on **latency / weight-footprint / action-fidelity**, and returns the Pareto frontier + the best config under the budget. Two budgets, two answers:
+
+```
+budget = minimize LATENCY,  rMSE ≤ 0.05  →  bf16 + CUDA graph   (latency-optimal)
+budget = minimize FOOTPRINT, rMSE ≤ 0.05  →  int4               (~7× smaller weights, rMSE 0.04)
+```
+
+It encodes what the experiments proved: CUDA graphs for latency, low-bit as a *footprint* lever (not a latency one). Footprint + fidelity are computed anywhere; latency is real on CUDA.
+
 ## Reproduce
 - **CPU evals (free, automatic):** every push runs `kernel/selfcheck.py` via [`ci.yml`](.github/workflows/ci.yml) — quant fidelity, kernel fallback numerics, no-leak determinism. Run locally with `python3 kernel/selfcheck.py`.
 - **GPU latency + evals:** [`RUN_ON_T4.md`](RUN_ON_T4.md) — ~10 min on a free Colab T4 via [`colab.ipynb`](colab.ipynb).
+- **Deploy-compiler:** `python3 kernel/compiler.py` — Pareto report + budget picks (footprint/fidelity real anywhere; latency real on CUDA).
 
 ## Principles
 

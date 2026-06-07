@@ -58,6 +58,22 @@ def main():
     check("cudagraph eager-fallback determinism",
           torch.allclose(gs.run(x0), flow_sample(fp, x0, 10, pkv)))
 
+    # 3b. compiler decision logic (Pareto + budget pick) — pure logic, GPU-free
+    from compiler import pareto, pick_config
+    rows = [
+        {"precision": "bf16", "steps": 10, "graph": True, "ms_per_step": 0.8, "weight_mb": 51, "rmse": 0.000},
+        {"precision": "int8", "steps": 10, "graph": True, "ms_per_step": 4.5, "weight_mb": 26, "rmse": 0.003},
+        {"precision": "int4", "steps": 10, "graph": True, "ms_per_step": 6.2, "weight_mb": 13, "rmse": 0.040},
+        {"precision": "int8", "steps": 2, "graph": False, "ms_per_step": 9.0, "weight_mb": 26, "rmse": 0.250},  # dominated
+    ]
+    pf = pareto(rows)
+    check("compiler pareto drops dominated config", len(pf) == 3 and rows[3] not in pf)
+    lat = pick_config(rows, {"objective": "ms_per_step", "max_rmse": 0.05})
+    check("compiler picks latency-optimal under fidelity budget", lat["precision"] == "bf16")
+    foot = pick_config(rows, {"objective": "weight_mb", "max_rmse": 0.05})
+    check("compiler picks footprint-optimal under fidelity budget", foot["precision"] == "int4")
+    check("compiler returns None when infeasible", pick_config(rows, {"max_weight_mb": 5}) is None)
+
     # 4. notebook is valid JSON
     nb = os.path.join(os.path.dirname(__file__), "..", "colab.ipynb")
     try:
