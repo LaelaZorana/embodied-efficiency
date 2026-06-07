@@ -7,7 +7,7 @@
 **1/**
 Everyone can train a vision-language-action model now. Almost nobody can run one on the robot.
 
-The bottleneck stopped being capability a while ago. It is deploy. End-to-end VLA inference runs at 3 to 5 Hz; a robot arm needs 50 to 100 Hz. That gap is the whole game.
+The bottleneck stopped being capability a while ago. It's deploy. End-to-end VLA inference runs at 3 to 5 Hz; a robot arm needs 50 to 100 Hz. That gap is the whole game.
 
 So I built the deploy layer and measured it. 🧵
 
@@ -34,12 +34,12 @@ Four experiments, one answer: the implementation was never the problem.
 **6/**
 Why: weight-only int4 is built for M=1 LLM decode of huge models, where weight reads dominate. A batch-1 VLA sampler, small skinny GEMMs plus heavy non-GEMM per-step work, is a different regime, and bf16 tensor cores win.
 
-Low-bit here is memory footprint, not speed.
+Low-bit here's memory footprint, not speed.
 
 **7/**
 I came to this from competition ML, golfing neural nets down to their minimum size under hard correctness budgets (ARC-AGI). Same instinct: where is precision free, where is it load-bearing.
 
-Knowing where the lever is not is half of performance engineering.
+Knowing where the lever isn't is half of performance engineering.
 
 **8/**
 Repo (public, CI-green, reproducible, notebooks plus evals):

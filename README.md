@@ -6,13 +6,13 @@
 
 Kernels, quantization, and a runtime trust layer for vision-language-action (VLA) models, so they run on the robot, inside a latency and power budget, and can be both deployed and governed.
 
-> A VLA folds laundry in a lab demo today. Put it on the actual robot and it stalls, and not because it cannot do the task. It cannot do it fast enough. End-to-end inference runs at 3 to 5 Hz, and a robot arm needs 50 to 100 Hz to move smoothly. The capability is already there. What stands between the demo and the robot is engineering.
+> A VLA folds laundry in a lab demo today. Put it on the actual robot and it stalls, and not because it can't do the task. It can't do it fast enough. End-to-end inference runs at 3 to 5 Hz, and a robot arm needs 50 to 100 Hz to move smoothly. The capability is already there. What stands between the demo and the robot is engineering.
 
 📄 **Read the thesis →** [THESIS.md](THESIS.md)
 
 ## The problem
 
-The frontier of embodied AI used to be whether the model could do the task. It can. The question now is whether it runs on this robot, inside this latency budget and this power envelope, cheaply enough to put a thousand of them in the field. That is an efficiency problem, and the levers that solve it, quantization, CUDA graphs, action chunking, speculative decoding, sit scattered across a year of papers with no agreement on which one actually pays off, because the answer depends on the workload. So this repo measures them on one concrete batch-1 VLA flow-matching sampler and reports the result, what wins (CUDA graphs, 5.9x) and what does not (weight-only low-bit, across four experiments), as reproducible tooling rather than paper claims.
+The frontier of embodied AI used to be whether the model could do the task. It can. The question now is whether it runs on this robot, inside this latency budget and this power envelope, cheaply enough to put a thousand of them in the field. That's an efficiency problem, and the levers that solve it, quantization, CUDA graphs, action chunking, speculative decoding, sit scattered across a year of papers with no agreement on which one actually pays off, because the answer depends on the workload. So this repo measures them on one concrete batch-1 VLA flow-matching sampler and reports the result, what wins (CUDA graphs, 5.9x) and what doesn't (weight-only low-bit, across four experiments), as reproducible tooling rather than paper claims.
 
 ## What's here
 
@@ -27,12 +27,12 @@ The frontier of embodied AI used to be whether the model could do the task. It c
 ## Findings (measured on T4 and L4, full data in [kernel/RESULTS.md](kernel/RESULTS.md))
 
 - ✅ **CUDA-graph capture of the sampler runs 5.9x over eager** (4.82 to 0.82 ms/step on T4), beats `torch.compile`, replays exactly, and leaks zero memory across fp16/int8/int4.
-- 🔬 **Weight-only low-bit buys no batch-1 latency, and I have the four experiments to show it.** The hand-written INT8/INT4 Triton kernel lost to cuBLAS. A tensor-core plus autotune rewrite changed nothing. A 512 to 4096 size sweep widened the gap instead of closing it. Then the production path, torchao/Marlin int4 on a supported L4 (Ada), lost too, running 1.2 to 1.6x slower than bf16 at every size. So this was never an implementation gap. A batch-1 VLA sampler is small skinny GEMMs plus heavy non-GEMM per-step work, which is not the regime weight-only int4 was built for (M=1 LLM decode of huge models). Here low-bit is a memory-footprint lever (int8 2x smaller, int4 4x smaller, action error under 5%), not a speed one.
+- 🔬 **Weight-only low-bit buys no batch-1 latency, and I have the four experiments to show it.** The hand-written INT8/INT4 Triton kernel lost to cuBLAS. A tensor-core plus autotune rewrite changed nothing. A 512 to 4096 size sweep widened the gap instead of closing it. Then the production path, torchao/Marlin int4 on a supported L4 (Ada), lost too, running 1.2 to 1.6x slower than bf16 at every size. So this was never an implementation gap. A batch-1 VLA sampler is small skinny GEMMs plus heavy non-GEMM per-step work, which isn't the regime weight-only int4 was built for (M=1 LLM decode of huge models). Here low-bit is a memory-footprint lever (int8 2x smaller, int4 4x smaller, action error under 5%), not a speed one.
 - Every number is gated by correctness, stale-input, and no-leak evals. Four experiments, the win and the negative reported the same way.
 
 ## Deploy-compiler (v0)
 
-The findings above are not just a report, they are baked into a budget-driven autotuner ([`kernel/compiler.py`](kernel/compiler.py)). Hand it a deployment budget and it searches across precision, steps, and cuda-graph, scores every config on latency, weight-footprint, and action-fidelity, and hands back the Pareto frontier plus the best config under the budget. Two budgets, two answers:
+The findings above aren't just a report, they're baked into a budget-driven autotuner ([`kernel/compiler.py`](kernel/compiler.py)). Hand it a deployment budget and it searches across precision, steps, and cuda-graph, scores every config on latency, weight-footprint, and action-fidelity, and hands back the Pareto frontier plus the best config under the budget. Two budgets, two answers:
 
 ```
 budget = minimize LATENCY,   rMSE <= 0.05  ->  bf16 + CUDA graph   (latency-optimal)
@@ -59,4 +59,4 @@ This grew out of golfing neural networks, building the smallest ONNX graphs that
 
 ---
 
-*Early-stage and public by design, because the roadmap is the positioning. If you are building robots and fighting the deploy gap, or working the same edge from the lab side, open an issue or reach out.*
+*Early-stage and public by design, because the roadmap is the positioning. If you're building robots and fighting the deploy gap, or working the same edge from the lab side, open an issue or reach out.*
