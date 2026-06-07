@@ -21,8 +21,8 @@ The frontier of embodied AI used to be whether the model could do the task. It c
 | **Thesis** | Why efficiency, not capability, is the bottleneck | ✅ [THESIS.md](THESIS.md) |
 | **CUDA-graph sampler** | manual graph capture of the N-step flow loop | ✅ **5.9x measured on T4** ([RESULTS.md](kernel/RESULTS.md)) |
 | **Low-bit weight quant** | hand kernel plus production torchao/Marlin int4 | 🔬 investigated, came back **negative** (slower than bf16 even on a supported L4; see findings) |
-| **Autotuning deploy-compiler** | budget in, Pareto frontier plus best config out; searches across precision, steps, and cuda-graph | ✅ **v0**, [kernel/compiler.py](kernel/compiler.py) |
-| **Runtime trust layer** | statistically certified non-regression, OOD abstention, intervention logging | 🔜 planned |
+| **Autotuning deploy-compiler** | budget in, Pareto frontier plus best config out; searches precision, steps, cuda-graph, action-chunking, and a speculative draft | ✅ **v1**, measured on a real L4 ([kernel/compiler.py](kernel/compiler.py)) |
+| **Runtime safety supervisor** | per-action finite, bounds, drift (OOD), and jerk checks, safe fallback, intervention log as the governance trail | ✅ **v0** ([safety/supervisor.py](safety/supervisor.py)) |
 
 ## Findings (measured on T4 and L4, full data in [kernel/RESULTS.md](kernel/RESULTS.md))
 
@@ -30,16 +30,19 @@ The frontier of embodied AI used to be whether the model could do the task. It c
 - 🔬 **Weight-only low-bit buys no batch-1 latency, and I have the four experiments to show it.** The hand-written INT8/INT4 Triton kernel lost to cuBLAS. A tensor-core plus autotune rewrite changed nothing. A 512 to 4096 size sweep widened the gap instead of closing it. Then the production path, torchao/Marlin int4 on a supported L4 (Ada), lost too, running 1.2 to 1.6x slower than bf16 at every size. So this was never an implementation gap. A batch-1 VLA sampler is small skinny GEMMs plus heavy non-GEMM per-step work, which isn't the regime weight-only int4 was built for (M=1 LLM decode of huge models). Here low-bit is a memory-footprint lever (int8 2x smaller, int4 4x smaller, action error under 5%), not a speed one.
 - Every number is gated by correctness, stale-input, and no-leak evals. Four experiments, the win and the negative reported the same way.
 
-## Deploy-compiler (v0)
+## Deploy-compiler (v1)
 
-The findings above aren't just a report, they're baked into a budget-driven autotuner ([`kernel/compiler.py`](kernel/compiler.py)). Hand it a deployment budget and it searches across precision, steps, and cuda-graph, scores every config on latency, weight-footprint, and action-fidelity, and hands back the Pareto frontier plus the best config under the budget. Two budgets, two answers:
+The findings above aren't just a report, they're built into a budget-driven autotuner ([`kernel/compiler.py`](kernel/compiler.py)). Hand it a deployment budget and it searches precision, integration steps, cuda-graph, action-chunking, and a speculative draft, scores every config on latency, weight-footprint, action-fidelity, and staleness, then hands back the Pareto frontier plus the best config under the budget. v1 runs the whole search on a real L4, so the latencies are measured.
+
+The biggest lever turned out to be action-chunking. Full-fidelity bf16 with a graph is 4.47 ms per call, but if you run all 50 actions in the chunk before recomputing, that's 0.089 ms per action, with the catch that the last action is 49 control steps stale. So you trade latency for staleness, and the compiler makes the trade explicit instead of hiding it. Three budgets, three answers:
 
 ```
-budget = minimize LATENCY,   rMSE <= 0.05  ->  bf16 + CUDA graph   (latency-optimal)
-budget = minimize FOOTPRINT,  rMSE <= 0.05  ->  int4               (about 7x smaller weights, rMSE 0.04)
+fastest action, full fidelity, no staleness  ->  bf16 + graph, 10 steps   (4.47 ms/action)
+smallest model, full fidelity                ->  int4 + graph             (13.7 MB, vs 51 MB for bf16)
+fastest action under 16 MB of weights        ->  int4 + graph + chunk-50  (~0.25 ms/action)
 ```
 
-It encodes what the experiments proved: CUDA graphs for latency, low-bit as a footprint lever and not a latency one. Footprint and fidelity compute anywhere; latency is real on CUDA.
+It carries what the experiments proved: CUDA graphs and action-chunking buy latency, int4 buys footprint, and the speculative draft doesn't pay here, because a 2-step draft is never close enough to the 10-step full to be accepted. Footprint, fidelity, and staleness compute anywhere; the latency is real on CUDA.
 
 ## Reproduce
 

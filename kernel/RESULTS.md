@@ -78,3 +78,20 @@ The researched failure-mode defenses held: exact replay (max_err 0), **zero leak
 | int4 | 13.11 | 3.88× | 0.0423 | 3.88× |
 
 Fidelity is excellent (int8 0.25%, int4 4.2% action error). The *ceiling* is real; the kernel doesn't yet *reach* it (§2).
+
+## Deploy-compiler v1, measured on a real L4 (`kernel/compiler.py`)
+
+v1 adds two levers and runs the whole search on a real L4, so these latencies are measured, not modeled. The big one is action-chunking: the sampler makes a whole chunk of actions in one call, so if you run k of them before recomputing, the per-action latency is one call divided by k, and the cost is staleness, because the last action you run is k-1 control steps old.
+
+Full-fidelity bf16 with a CUDA graph is 4.47 ms per call. Run all 50 actions in the chunk and that's 0.089 ms per action at 49 steps of staleness; recompute every 12 and it's 0.37 ms per action at 11 steps. So the latency you can buy depends entirely on how stale you'll let the last action get, and the compiler makes that trade explicit instead of burying it.
+
+Budget picks (batch=1, L4, +graph):
+- fastest action, full fidelity, no staleness: bf16, 10 steps, 4.47 ms/action.
+- smallest model, full fidelity: int4, 13.7 MB (vs 51 MB for bf16).
+- fastest action you can get under 16 MB of weights: int4 with chunk-50, about 0.25 ms/action.
+
+The speculative draft didn't pay. A 2-step draft is never within tolerance of the 10-step full, so the measured acceptance rate is 0 and the expected latency comes out slower than just running the full model. Reported straight, like everything else.
+
+## Runtime safety supervisor (`safety/supervisor.py`)
+
+The second half of the thesis. It sits between the policy and the actuator and checks every action: finite, in-bounds, how far it's drifted from the calibration set, and how hard it jumped from the last one. When a check trips, it holds the last accepted action and writes an intervention record, so the log is the governance trail an on-call engineer or a regulator can read. On a clean rollout it stays out of the way; feed it a NaN, an out-of-bounds command, or a sudden lurch and it catches each one and sends something safe instead. No GPU, and the checks are covered by the CI evals.
