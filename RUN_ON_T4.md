@@ -1,50 +1,36 @@
-# Run the GPU evals on a free Colab T4 (step by step)
+# Run the GPU evals on a free Colab T4
 
-Closes the only open gate: real kernel **latency** + the **GPU-only evals** (CUDA-graph
-correctness / stale-input / no-leak, Triton-vs-torch correctness). ~10 minutes, free.
+The CPU evals run in CI on every push. This is the other half, real kernel **latency**
+plus the **GPU-only evals** (CUDA-graph correctness, stale input, no leak, and Triton
+against a torch reference). It takes about ten minutes on a free T4, and it reproduces
+the numbers in [`kernel/RESULTS.md`](kernel/RESULTS.md).
 
-## 1. Make a read-only token (so Colab can clone the private repo)
-1. GitHub → **Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token.**
-2. **Repository access:** *Only select repositories* → `LaelaZorana/embodied-efficiency`.
-3. **Repository permissions:** *Contents → Read-only* (nothing else needed to clone).
-4. **Expiration:** 7 days (short, you'll revoke it after the run anyway).
-5. Generate, copy the token (starts `github_pat_…`).
+## 1. Open the notebook on a T4
+1. Go to https://colab.research.google.com, then **File → Upload notebook** and upload
+   `colab.ipynb` from this repo, or **File → Open notebook → GitHub** and pick the repo.
+2. **Runtime → Change runtime type → T4 GPU**, then Save. The standard T4 is free and
+   it's everything these evals need, so there's no reason to reach for a bigger
+   accelerator.
 
-> Read-only + single-repo + short expiry = minimal blast radius. **Revoke it after step 4.**
+## 2. Run all
+The repo is public, so the clone cell works as written with no token and nothing to
+configure. **Runtime → Run all.**
 
-## 2. Open Colab on a free T4
-1. https://colab.research.google.com → **File → Upload notebook** → upload `colab.ipynb` from this repo
-   (or **File → Open notebook → GitHub**, sign in, pick the repo).
-2. **Runtime → Change runtime type → T4 GPU** → Save.
-   ⚠️ Standard **T4 only**, never A100/L4/V100/TPU (those burn paid units).
+## 3. What the output should say
+- **§1 latency**, `eager` against `compile_reduce_overhead` against `graph`, in ms/step
+  at 10, 4, and 8 steps. The manual graph column is the win, about 5.9x over eager.
+- **§2 low-bit**, `int8/graph` and `int4/graph` ms/step. These come out *slower* than
+  fp16 plus a graph, which is the measured negative written up in `kernel/RESULTS.md`
+  rather than a broken run. Compare the weight-traffic ceilings (1.97x and 3.88x)
+  against the latency and you can see the gap for yourself.
+- **§3 evals** must print `Triton kernel correctness ✓` and
+  `CUDA-graph correctness + stale-input + no-leak ✓`, with action rMSE 0.0025 (int8)
+  and 0.0423 (int4). Any `FAIL` means the latency above isn't trustworthy yet.
+- **§4 the deploy compiler** prints the Pareto frontier and the budget picks. The
+  latencies are real because you're on a GPU.
+- **§5 the safety supervisor** needs no GPU and runs anywhere.
 
-## 3. Wire the token + run
-In the **clone cell**, set:
-```python
-REPO = 'https://LaelaZorana:github_pat_XXXX@github.com/LaelaZorana/embodied-efficiency.git'
-```
-Then **Runtime → Run all.**
-
-> Don't save the notebook back to GitHub/Drive with the token in it, edit that cell only in the live session. (The repo copy keeps the tokenless placeholder.)
-
-## 4. What to copy back to me
-Paste the printed output of the three sections. The numbers that matter:
-
-- **§1 latency**, for `eager`, `compile_reduce_overhead`, `graph`: the `ms/step` at steps 10/4/8.
-- **§2 low-bit**, `int8/eager`, `int8/graph`, `int4/eager`, `int4/graph`: `ms/step`.
-  (Compare against the **1.97× / 3.88×** weight-traffic ceilings.)
-- **§3 evals**, must read `Triton kernel correctness ✓` and
-  `CUDA-graph correctness + stale-input + no-leak ✓`. Note any `FAIL`.
-
-## 5. After it passes
-1. **Revoke the token** (Settings → the fine-grained token → Delete).
-2. Send me the output, I'll fill the real numbers into `kernel/RESULTS.md` and flip the
-   thesis/README "pending T4" lines to actual figures.
-3. Then flip the repo public when you're happy: `gh repo edit LaelaZorana/embodied-efficiency --visibility public`.
-
----
-
-### No-token alternative
-Skip the token: in Colab, drag the `kernel/` folder into the file panel, then run
+## No-notebook alternative
+Drag the `kernel/` folder into the Colab file panel and run the scripts directly,
 `!python kernel/triton_gemm.py`, `!python kernel/cudagraph.py`, and the `bench.py`
-lines from `colab.ipynb` directly. Slightly more manual; no credentials involved.
+lines from `colab.ipynb`. A little more manual, same output.
